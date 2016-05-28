@@ -1,13 +1,16 @@
-## JavaScript Calc-Compile
+**THIS IS A WORK IN PROGRESS**
+
+# JavaScript Calc-Compile
 
 Simple compiler for turning excel-style field calculation strings into
-JavaScript functions. Also is able to export a "prettied" AST for easily
-passing the data to the server as queries via JSON.
+JavaScript functions that can act on data-set collections.
 
 ### Purpose
 
 The purpose of this is to allow "excel style" table manipulation by
-users who are comfortable writing spreadsheet function strings.
+users who are comfortable writing spreadsheet function strings. Useful in
+applications that allow the user to manipulate the data they are seeing (obvious
+examples: Microsoft Excel and LibreOffice Calc)
 
 ### A humble example
 
@@ -42,20 +45,3 @@ var data = {
     {FIELD_1: 2, FIELD_2: 20, FIELD_3: 22}
 }
 ```
-
-Kewl.
-
-### Hmm.... partial compilation?
-
-The compiler can actual return the AST instead of the final function. It can
-then finish compilation of the AST whenever you call it after that.
-
-This means you have an opportunity to manipulate that AST and get _really_
-fancy.
-
-
-One killer feature of this is allowing both the client and the server to
-manipulate a data set. 
-
-Let's say we want to add a calculated field to a data set, but we don't have
-all the necessary information present in the data set.

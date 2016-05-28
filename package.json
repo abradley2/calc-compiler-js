@@ -1,5 +1,5 @@
 {
-  "name": "js-excel-query-compiler",
+  "name": "calc-compiler-js",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -7,23 +7,25 @@
     "test": "test"
   },
   "dependencies": {
-    "chai": "^3.5.0"
+
   },
   "devDependencies": {
     "browserify": "^13.0.1",
+    "chai": "^3.5.0",
     "mocha": "^2.5.3"
   },
   "scripts": {
-    "test": "test"
+    "test": "mocha",
+    "build": "browserify ./index.js --standalone CalcCompiler -o ./dist/CalcCompiler.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abradley2/query-compiler.git"
+    "url": "git+https://github.com/abradley2/calc-compiler-js.git"
   },
   "author": "",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/abradley2/query-compiler/issues"
+    "url": "https://github.com/abradley2/calc-compiler-js/issues"
   },
-  "homepage": "https://github.com/abradley2/query-compiler#readme"
+  "homepage": "https://github.com/abradley2/calc-compiler-js"
 }

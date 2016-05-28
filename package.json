@@ -1,0 +1,29 @@
+{
+  "name": "js-excel-query-compiler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "chai": "^3.5.0"
+  },
+  "devDependencies": {
+    "browserify": "^13.0.1",
+    "mocha": "^2.5.3"
+  },
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abradley2/query-compiler.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/abradley2/query-compiler/issues"
+  },
+  "homepage": "https://github.com/abradley2/query-compiler#readme"
+}

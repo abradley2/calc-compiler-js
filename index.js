@@ -2,7 +2,7 @@ var compiler = require('./lib/compiler'),
     c = new compiler()
 
 
-var testTemplate = 'COL_3 = ADD(COL_1 , 7)'
+var testTemplate = '5 + ADD(COL_1 + 2 , 7) * 3'
 
 c.compileTemplate( testTemplate )
 

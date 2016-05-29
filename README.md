@@ -45,3 +45,20 @@ var data = {
     {FIELD_1: 2, FIELD_2: 20, FIELD_3: 22}
 }
 ```
+
+
+### Contributing
+
+Open to pulls.
+
+Follow the style guidelines of
+[javascript-standard](https://github.com/feross/standard/blob/master/RULES.md#javascript-standard-style)
+with these two exceptions
+
+1. Indentation is 4 spaces, not 2
+2. var declarations seperated by a comma are OK
+```
+var one = 1,
+    two = 2,
+    other = 'a string'
+```

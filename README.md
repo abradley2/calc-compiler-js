@@ -57,14 +57,14 @@ that knows which row it is assigning to. This allows a much cleaner:
 
 
 ```
-var calcString = 'C = SUM(A, B); D = DIFF9'
+var calcString = 'C=SUM(A, B)'
 ```
 
 Expressions are evaluated in the order in which they appear in the block, so
 you can make compound calculated columns:
 
 ```
-var calcString = `C = SUM(A, B); D = SUM(C, 24);`
+var calcString = `C=SUM(A, B); D=SUM(C, 24)`
 ```
 
 And for example, lets say we have a sizeable data set similar to this:

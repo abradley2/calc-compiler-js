@@ -1,15 +1,58 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.CalcCompiler = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var compiler = require('./lib/compiler'),
-    c = new compiler()
+var Compiler = require('./lib/Compiler'),
+    c = new Compiler()
 
 
-var testTemplate = '5 + ADD(COL_1 + 2 , 7) * 3'
+var testTemplate = 'COL_2 = 5 + ADD(COL_1 + 2 , 7) * 3'
 
-c.compileTemplate( testTemplate )
+var data = [
+    {COL_1: 2},
+    {COL_1: 7},
+    {COL_1: 1},
+    {COL_1: 43}
+]
 
-module.exports = compiler
+var outFunc = c.compileTemplate( testTemplate )
 
-},{"./lib/compiler":4}],2:[function(require,module,exports){
+data.map( outFunc, data )
+
+module.exports = Compiler
+
+},{"./lib/Compiler":2}],2:[function(require,module,exports){
+var grammar = require('./grammar'),
+    Tokenizer = require('./Tokenizer'),
+    Tree = require('./Tree'),
+    assign = require('./util/assign')
+
+function Compiler () {
+
+    this.tokenizer = new Tokenizer( grammar )
+
+}
+
+assign(Compiler.prototype, {
+
+    compileTemplate: function (template) {
+
+        var tokens = this.tokenizer.getTokens(template)
+
+        console.log('tokens = ',tokens)
+
+        var tree = new Tree(tokens)
+
+        tree.parse()
+
+        return function (item) {
+            return item
+        }
+
+    }
+
+})
+
+module.exports = Compiler
+
+},{"./Tokenizer":3,"./Tree":4,"./grammar":6,"./util/assign":7}],3:[function(require,module,exports){
 var assign = require('./util/assign')
 
 function Tokenizer (grammar) {
@@ -23,7 +66,7 @@ assign(Tokenizer.prototype, {
             stack = []
 
         while (template.length > 0){
-            template = yieldNextToken(template, stack)
+            template = this.yieldNextToken(template, stack)
 
             /*
                 Once there's at least 2 elements on the stack, give each stack
@@ -37,13 +80,15 @@ assign(Tokenizer.prototype, {
 
         }
 
+        return stack
+
     },
 
     yieldNextToken: function (template, stack) {
 
         this.grammar.some(function (grammarObj) {
 
-            var match = grammarObj.test.exec(tpl)
+            var match = grammarObj.test.exec(template)
 
             if (match) {
                 template = template.replace(grammarObj.test, '')
@@ -63,99 +108,104 @@ assign(Tokenizer.prototype, {
 
 module.exports = Tokenizer
 
-},{"./util/assign":7}],3:[function(require,module,exports){
+},{"./util/assign":7}],4:[function(require,module,exports){
 var assign = require('./util/assign')
 
-function Node (type, token) {
-    this.type = type
-    this.token = token
-
-    if (type === 'OPERATOR') {
-        this.precedence = {
-            '+': 0,
-            '-': 0,
-            '/': 1,
-            '*': 1
-        }[token.found]
-    }
-
+function Tree (tokens) {
+    this.tokens = tokens
 }
 
-function tree (tokens) {
+assign(Tree.prototype, {
 
-    var root = {
-        type: 'Root',
-        nodes: []
-    }
+    /*
+        Because of what we are compiling, we have no more than a single
+        block of expressions. Makes this task much easier than it would
+        be. For future reference should this be expanded to support
+        multiple blocks, this function should be renamed to 'parseBlock'
+        and called internally from the master 'parse' function
+    */
+    parse: function () {
 
-    // http://stackoverflow.com/questions/13421424/how-to-evaluate-an-infix-expression-in-just-one-scan-using-stacks#answer-16068554
-    var operators = [],
-        operands = []
-
-    while (tokens.length > 0) {
-        var token = tokens.shift()
-        // if character is operand or (. push on the operandStack
-        switch (token.name) {
-            case 'OTHER':
-                operands.push( new Node('OTHER', token) )
-                break
-            case 'ARG_SEP':
-                operators.push( new Node('ARG_SEP', token) )
-                break
-            case 'OPERATOR':
-                operators.push( new Node('OPERATOR', token) )
-                break
-            case 'GET_VAR':
-                operands.push( new Node('GET_VAR', token) )
-                break
-            case 'BEG_ARGS':
-                operands.push( new Node('BEG_ARGS', token) )
-                break
-            case 'END_ARGS':
-                operands.push( new Node('END_ARGS', token) )
-                break
-            default:
-                break
+        var root = {
+            type: 'Root',
+            nodes: []
         }
-    }
 
-    console.log('operators = ',operators)
-    console.log('operands = ',operands)
+        // create a clone of the tokens array so it is not mutated
+        var tokens = this.tokens.slice()
 
-}
+        while (tokens.length > 0) {
 
-module.exports = tree
+            nodes.push(
+                this.getExpressionNode(tokens)
+            )
 
-},{"./util/assign":7}],4:[function(require,module,exports){
-var grammar = require('./grammar'),
-    Tokenizer = require('./Tokenizer'),
-    TreeParser = require('./TreeParser'),
-    assign = require('./util/assign')
+        }
 
-function Compiler () {
+        console.log('operators = ',operators)
+        console.log('operands = ',operands)
+    },
 
-    this.tokenizer = new Tokenizer( grammar )
+    getFunctionNode: function (tokens) {
 
-    this.treeParser = new TreeParser()
+        return {
+            type: 'function',
+            // nodes can be constants or other functions
+            nodes: []
+        }
 
-}
+    },
 
-assign(Compiler.prototype, {
+    getConstantNode: function (tokens) {
 
-    compileTemplate: function (template) {
+        return {
+            type: 'constant',
+            // constants do not have nodes
+            nodes: null
+        }
 
-        var tokens = this.tokenizer.getTokens(template),
-            ast = tree(tokens)
+    },
+
+    getExpressionNode: function (tokens) {
+
+        // http://stackoverflow.com/questions/13421424/how-to-evaluate-an-infix-expression-in-just-one-scan-using-stacks#answer-16068554
+        var operators = [],
+            operands = [],
+            expressionEnd = false
+
+        while (tokens.length > 0 || !expressionEnd) {
+
+            var token = tokens.shift()
+            //if character is operand or (. push on the operandStack
+            switch (token.type) {
+                case 'OTHER':
+                    console.log('OTHER = ',token)
+                    operators.push(token)
+                    break
+                case 'BEG_ARGS':
+                    operators.push(token)
+                    break
+                default:
+                    break
+
+            }
+
+        }
+
+        // if character is operand or (. push on the operandStack
+        return {
+            type: 'expression',
+            // nodes can be functions or constants
+            nodes: []
+        }
 
     }
 
 })
 
+module.exports = Tree
 
-
-module.exports = compiler
-
-},{"./Tokenizer":2,"./TreeParser":3,"./grammar":6,"./util/assign":7}],5:[function(require,module,exports){
+},{"./util/assign":7}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',

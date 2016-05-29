@@ -3,55 +3,173 @@ var compiler = require('./lib/compiler'),
     c = new compiler()
 
 
-var testTemplate = 'COL_3 = ADD(COL_1 , 7)'
+var testTemplate = '5 + ADD(COL_1 + 2 , 7) * 3'
 
 c.compileTemplate( testTemplate )
 
 module.exports = compiler
 
-},{"./lib/compiler":2}],2:[function(require,module,exports){
+},{"./lib/compiler":4}],2:[function(require,module,exports){
+var assign = require('./util/assign')
+
+function Tokenizer (grammar) {
+    this.grammar = grammar
+}
+
+assign(Tokenizer.prototype, {
+
+    getTokens: function (tpl) {
+        var template = tpl,
+            stack = []
+
+        while (template.length > 0){
+            template = yieldNextToken(template, stack)
+
+            /*
+                Once there's at least 2 elements on the stack, give each stack
+                element a reference to the previous one for convenience
+            */
+            if (stack.length >= 2) {
+
+                stack[stack.length - 1].previous = stack[stack.length - 2]
+
+            }
+
+        }
+
+    },
+
+    yieldNextToken: function (template, stack) {
+
+        this.grammar.some(function (grammarObj) {
+
+            var match = grammarObj.test.exec(tpl)
+
+            if (match) {
+                template = template.replace(grammarObj.test, '')
+                stack.push({
+                    name: grammarObj.name,
+                    found: match[0]
+                })
+                return true
+            }
+
+        })
+
+        return template
+    }
+
+})
+
+module.exports = Tokenizer
+
+},{"./util/assign":7}],3:[function(require,module,exports){
+var assign = require('./util/assign')
+
+function Node (type, token) {
+    this.type = type
+    this.token = token
+
+    if (type === 'OPERATOR') {
+        this.precedence = {
+            '+': 0,
+            '-': 0,
+            '/': 1,
+            '*': 1
+        }[token.found]
+    }
+
+}
+
+function tree (tokens) {
+
+    var root = {
+        type: 'Root',
+        nodes: []
+    }
+
+    // http://stackoverflow.com/questions/13421424/how-to-evaluate-an-infix-expression-in-just-one-scan-using-stacks#answer-16068554
+    var operators = [],
+        operands = []
+
+    while (tokens.length > 0) {
+        var token = tokens.shift()
+        // if character is operand or (. push on the operandStack
+        switch (token.name) {
+            case 'OTHER':
+                operands.push( new Node('OTHER', token) )
+                break
+            case 'ARG_SEP':
+                operators.push( new Node('ARG_SEP', token) )
+                break
+            case 'OPERATOR':
+                operators.push( new Node('OPERATOR', token) )
+                break
+            case 'GET_VAR':
+                operands.push( new Node('GET_VAR', token) )
+                break
+            case 'BEG_ARGS':
+                operands.push( new Node('BEG_ARGS', token) )
+                break
+            case 'END_ARGS':
+                operands.push( new Node('END_ARGS', token) )
+                break
+            default:
+                break
+        }
+    }
+
+    console.log('operators = ',operators)
+    console.log('operands = ',operands)
+
+}
+
+module.exports = tree
+
+},{"./util/assign":7}],4:[function(require,module,exports){
 var grammar = require('./grammar'),
-    delimiters = require('./configure/delimiters'),
-    tokenize = require('./tokenize'),
-    tree = require('./tree'),
+    Tokenizer = require('./Tokenizer'),
+    TreeParser = require('./TreeParser'),
     assign = require('./util/assign')
 
-var compiler = function (settings) {
-    settings = settings || {}
+function Compiler () {
 
-    // allow adding custom delimiters. Keep ones that aren't overriden
-    this.delimiters = assign(delimiters, settings.delimiters || {})
+    this.tokenizer = new Tokenizer( grammar )
 
-    this.grammar = grammar( this.delimiters )
+    this.treeParser = new TreeParser()
 
 }
 
-compiler.prototype.compileTemplate = function (template) {
+assign(Compiler.prototype, {
 
-    var tokens = tokenize(template, this.grammar),
-        ast = tree(tokens)
+    compileTemplate: function (template) {
 
-}
+        var tokens = this.tokenizer.getTokens(template),
+            ast = tree(tokens)
+
+    }
+
+})
 
 
 
 module.exports = compiler
 
-},{"./configure/delimiters":3,"./grammar":4,"./tokenize":5,"./tree":6,"./util/assign":7}],3:[function(require,module,exports){
+},{"./Tokenizer":2,"./TreeParser":3,"./grammar":6,"./util/assign":7}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',
+    END_EXPR: ';',
     USE_VAR: '$',
     ARG_SEP: ',',
-    FIX_ROW: ':',
-    OPERATOR: '+|-|*|/',
     ASSIGN: '='
 }
 
 module.exports = delimiters
 
-},{}],4:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 var getEscaped = require('./util/getEscaped'),
+    delimiters = require('./configure/delimiters'),
     pluck = require('./util/pluck')
 
 function delimiterToRegex (name, val) {
@@ -74,6 +192,24 @@ var grammar = function (delimiters) {
         )
     })
 
+    regexes.push({
+        name: 'OPERATOR',
+        regexString: '[\*\/\+\-]',
+        test: new RegExp('^[\*\/\+\-]')
+    })
+
+    regexes.push({
+        name: 'INT',
+        regexString: '[\d]+',
+        test: new RegExp('^[\d]+')
+    })
+
+    regexes.push({
+        name: 'STRING',
+        regexString: '[\w]+',
+        test: new RegExp('^[\w]+')
+    })
+
     // add in a regex to match any whitespace
     regexes.push({
         name: 'WHITESPACE',
@@ -92,112 +228,9 @@ var grammar = function (delimiters) {
 
 }
 
-module.exports = grammar
+module.exports = grammar(delimiters)
 
-},{"./util/getEscaped":8,"./util/pluck":9}],5:[function(require,module,exports){
-function yieldNextToken (tpl, grammar, stack) {
-
-    grammar.some(function (grammarObj) {
-
-        var match = grammarObj.test.exec(tpl)
-
-        if (match) {
-            tpl = tpl.replace(grammarObj.test, '')
-            stack.push({
-                name: grammarObj.name,
-                found: match[0]
-            })
-            return true
-        }
-
-    })
-
-    return tpl
-
-}
-
-function tokenize (tpl, grammar) {
-    var template = tpl,
-        stack = []
-
-    while (template.length > 0){
-        template = yieldNextToken(template, grammar, stack)
-
-        /*
-            Once there's at least 2 elements on the stack, give each stack
-            element a reference to the previous one for convenience
-        */
-        if (stack.length >= 2) {
-
-            stack[stack.length - 1].previous = stack[stack.length - 2]
-
-        }
-
-    }
-
-    return stack
-}
-
-module.exports = tokenize
-
-},{}],6:[function(require,module,exports){
-function tree (tokens) {
-
-    console.log('tokens = ', tokens)
-
-    var root = {
-        type: 'Root',
-        nodes: []
-    }
-
-    /*
-        BEG_ARGS: '(',
-        END_ARGS: ')',
-        USE_VAR: '$',
-        ARG_SEP: ',',
-        FIX_ROW: ':',
-        OPERATOR: '+|-|*|/',
-        ASSIGN: '='
-    */
-
-    for (var i = 0; i < 10; i++) {
-
-        var token = tokens[i]
-
-        switch (token.name) {
-            case 'BEG_ARGS':
-                console.log('BEG_ARGS')
-                break
-            case 'END_ARGS':
-                console.log('END_ARGS')
-                break
-            case 'USE_VAR':
-                console.log('USE_VAR')
-                break
-            case 'ARG_SEP':
-                console.log('ARG_SEP')
-                break
-            case 'FIX_ROW':
-                console.log('FIX_ROW')
-                break
-            case 'OPERATOR':
-                console.log('OPERATOR')
-                break
-            case 'ASSIGN':
-                console.log('ASSIGN')
-            default:
-                console.log('NO NODE MATCH')
-                break
-        }
-
-
-    }
-
-}
-
-module.exports = tree
-
-},{}],7:[function(require,module,exports){
+},{"./configure/delimiters":5,"./util/getEscaped":8,"./util/pluck":9}],7:[function(require,module,exports){
 function assign (target, source) {
 
     for (key in source) {

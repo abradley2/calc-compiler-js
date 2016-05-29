@@ -58,6 +58,7 @@ with these two exceptions
 1. Indentation is 4 spaces, not 2
 2. var declarations seperated by a comma are OK
 ```
+// totally fine
 var one = 1,
     two = 2,
     other = 'a string'

@@ -3,7 +3,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = 'COL_2 = 5 + ADD(COL_1 + 2 , 7) * 3'
+var testTemplate = '52+ADD(COL_1+2,7)*3'
 
 var data = [
     {COL_1: 2},
@@ -22,6 +22,7 @@ module.exports = Compiler
 var grammar = require('./grammar'),
     Tokenizer = require('./Tokenizer'),
     Tree = require('./Tree'),
+    func = require('./func'),
     assign = require('./util/assign')
 
 function Compiler () {
@@ -36,12 +37,20 @@ assign(Compiler.prototype, {
 
         var tokens = this.tokenizer.getTokens(template)
 
-        console.log('tokens = ',tokens)
-
         var tree = new Tree(tokens)
 
-        tree.parse()
+        var nodes = tree.parse()
 
+        /*
+            now use the functions in /func
+            to sub in for function nodes and
+            create a working expression
+        */
+
+
+        /*
+            Finally, return the output function
+        */
         return function (item) {
             return item
         }
@@ -52,7 +61,7 @@ assign(Compiler.prototype, {
 
 module.exports = Compiler
 
-},{"./Tokenizer":3,"./Tree":4,"./grammar":6,"./util/assign":7}],3:[function(require,module,exports){
+},{"./Tokenizer":3,"./Tree":4,"./func":7,"./grammar":8,"./util/assign":9}],3:[function(require,module,exports){
 var assign = require('./util/assign')
 
 function Tokenizer (grammar) {
@@ -65,7 +74,7 @@ assign(Tokenizer.prototype, {
         var template = tpl,
             stack = []
 
-        while (template.length > 0){
+        while (template.length > 0) {
             template = this.yieldNextToken(template, stack)
 
             /*
@@ -73,8 +82,8 @@ assign(Tokenizer.prototype, {
                 element a reference to the previous one for convenience
             */
             if (stack.length >= 2) {
-
-                stack[stack.length - 1].previous = stack[stack.length - 2]
+                // for now, I don't think I need this
+                //stack[stack.length - 1].previous = stack[stack.length - 2]
 
             }
 
@@ -108,7 +117,7 @@ assign(Tokenizer.prototype, {
 
 module.exports = Tokenizer
 
-},{"./util/assign":7}],4:[function(require,module,exports){
+},{"./util/assign":9}],4:[function(require,module,exports){
 var assign = require('./util/assign')
 
 function Tree (tokens) {
@@ -134,19 +143,68 @@ assign(Tree.prototype, {
         // create a clone of the tokens array so it is not mutated
         var tokens = this.tokens.slice()
 
+        // remove whitespace tokens. They aren't relevant
+        this.removeWhitespaceTokens(tokens)
+
         while (tokens.length > 0) {
 
-            nodes.push(
+            root.nodes.push(
                 this.getExpressionNode(tokens)
             )
 
         }
 
-        console.log('operators = ',operators)
-        console.log('operands = ',operands)
+        return root
     },
 
-    getFunctionNode: function (tokens) {
+    /*
+        function for removing all whitespace token
+    */
+    removeWhitespaceTokens: function (tokens) {
+        tokens = tokens.filter(function (token) {
+            return token.name !== 'WHITESPACE'
+        })
+        return tokens
+    },
+
+    /* 
+        Get a singular function argument.
+        Called by getFunctionArgs
+    */
+    getFunctionArgs: function (tokens, _args) {
+        args = args || []
+
+        var token = tokens.shift()
+
+        switch (token.name) {
+            case 'ARG_SEP':
+                return this.getFunctionArgs(tokens, args)
+            case 'OTHER':
+                args.push( this.getOtherNode(token, tokens) )
+                return this.getFunctionArgs(tokens, args)
+            case 'BEG_ARGS':
+                args.push( this.getExpressionNode(tokens) )
+                return this.getFunctionArgs(tokens, args)
+            case 'END_ARGS':
+                return args
+            default:
+                throw new Error('ERROR: unexpected end of arguments', token)
+        }
+        
+    },
+
+
+    /*
+        Get a function node
+        Called when an identifier is followed by a (
+        which signifies the beginning of an argument list or invocation
+    */
+    getFunctionNode: function (token, tokens) {
+        var begArgToken = tokens.shift()
+        console.log('GOT A FUNCTION', token)
+
+        // get all the args until the end parens is found
+        var args = this.getFunctionArgs(tokens)
 
         return {
             type: 'function',
@@ -156,13 +214,66 @@ assign(Tree.prototype, {
 
     },
 
-    getConstantNode: function (tokens) {
+    /*
+        Get a constant node
+        Called when a col/row lookup (identifier not followed by function args),
+        string, or number is found
+    */
+    getConstantNode: function (token, tokens) {
+        var next = tokens[0]
+        console.log('next = ',next)
+        if (next && next.name === 'BEG_ARGS') {
 
-        return {
-            type: 'constant',
-            // constants do not have nodes
-            nodes: null
+            return this.getFunctionNode(token, tokens)
+
+        } else {
+
+            return {
+                type: 'constant',
+                content: token.found,
+                // constants do not have nodes
+                nodes: null
+            }
+
         }
+
+    },
+
+    getOtherNode: function (token, tokens) {
+        // order is important here
+        if ( token.found.match(/^\d/) ) {
+        
+            return this.getConstantNode(token, tokens)
+        
+        } else if ( token.found.match(/^\w/) ) {
+        
+            return this.getIdentifierNode(token, tokens)
+        
+        } else if ( token.found.match(/^"/) ) {
+        
+            return this.getConstantNode(token, tokens)
+
+        } else {
+
+            throw new Error('ERROR: unidentified token: ', token)
+
+        }
+
+    },
+
+    getIdentifierNode: function (token, tokens) {
+        var next = tokens[0]
+
+        if (next && next.name === 'BEG_ARGS') {
+            return this.getFunctionNode(token, tokens)
+        } else {
+            return {
+                type: 'IDENTIFIER',
+                content: token.found,
+                nodes: null
+            }
+        }
+
 
     },
 
@@ -173,17 +284,20 @@ assign(Tree.prototype, {
             operands = [],
             expressionEnd = false
 
-        while (tokens.length > 0 || !expressionEnd) {
+        while (tokens.length > 0 && !expressionEnd) {
 
             var token = tokens.shift()
+
             //if character is operand or (. push on the operandStack
-            switch (token.type) {
+            switch (token.name) {
                 case 'OTHER':
-                    console.log('OTHER = ',token)
-                    operators.push(token)
+                    operands.push( this.getOtherNode(token, tokens) )
                     break
                 case 'BEG_ARGS':
-                    operators.push(token)
+
+                    break
+                case 'END_ARGS':
+
                     break
                 default:
                     break
@@ -195,8 +309,12 @@ assign(Tree.prototype, {
         // if character is operand or (. push on the operandStack
         return {
             type: 'expression',
+            assignsTo: null,
             // nodes can be functions or constants
-            nodes: []
+            nodes: {
+                operators: operators,
+                operands: operands
+            }
         }
 
     }
@@ -205,7 +323,7 @@ assign(Tree.prototype, {
 
 module.exports = Tree
 
-},{"./util/assign":7}],5:[function(require,module,exports){
+},{"./util/assign":9}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',
@@ -218,6 +336,22 @@ var delimiters = {
 module.exports = delimiters
 
 },{}],6:[function(require,module,exports){
+function SUM () {
+    var retVal = 0
+
+    for (var i = 0; i < arguments.length; i++) retVal += arguments[i]
+
+    return retVal
+}
+
+module.exports = SUM
+
+},{}],7:[function(require,module,exports){
+module.exports = {
+    'SUM': require('./SUM')
+}
+
+},{"./SUM":6}],8:[function(require,module,exports){
 var getEscaped = require('./util/getEscaped'),
     delimiters = require('./configure/delimiters'),
     pluck = require('./util/pluck')
@@ -245,29 +379,17 @@ var grammar = function (delimiters) {
     regexes.push({
         name: 'OPERATOR',
         regexString: '[\*\/\+\-]',
-        test: new RegExp('^[\*\/\+\-]')
-    })
-
-    regexes.push({
-        name: 'INT',
-        regexString: '[\d]+',
-        test: new RegExp('^[\d]+')
-    })
-
-    regexes.push({
-        name: 'STRING',
-        regexString: '[\w]+',
-        test: new RegExp('^[\w]+')
+        test: new RegExp(/^[\*\/\+\-]/)
     })
 
     // add in a regex to match any whitespace
     regexes.push({
         name: 'WHITESPACE',
         regexString: '[\ \t\r\n]+',
-        test: new RegExp('^[\ \t\r\n]+')
+        test: new RegExp(/^[\ \t\r\n]+/)
     })
 
-    // create a regex that matches anything apart from keywords and whitespace
+    // create a regeSTRINGx that matches anything apart from keywords and whitespace
     var allRegex = pluck(regexes, 'regexString').join('|')
     regexes.push({
         name: 'OTHER',
@@ -280,7 +402,7 @@ var grammar = function (delimiters) {
 
 module.exports = grammar(delimiters)
 
-},{"./configure/delimiters":5,"./util/getEscaped":8,"./util/pluck":9}],7:[function(require,module,exports){
+},{"./configure/delimiters":5,"./util/getEscaped":10,"./util/pluck":11}],9:[function(require,module,exports){
 function assign (target, source) {
 
     for (key in source) {
@@ -298,7 +420,7 @@ function assign (target, source) {
 
 module.exports = assign
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 function getEscaped (str) {
     /*
         basically any special character I want to escape, preceded by a \
@@ -311,7 +433,7 @@ function getEscaped (str) {
 
 module.exports = getEscaped
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 function pluck (collection, prop) {
 
     return collection.map(function (item) {

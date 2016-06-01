@@ -2,7 +2,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = 'SIN( MAX(2, 3) / 3 * PI)'
+var testTemplate = '52 + SUM(COL_100 - 8, 3) / 9'
 
 var data = [
     {COL_1: 2},

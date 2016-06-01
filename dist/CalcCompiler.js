@@ -3,7 +3,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = 'SIN( MAX(2, 3) / 3 * PI)'
+var testTemplate = '52 + SUM(COL_100 - 8, 3) / 9'
 
 var data = [
     {COL_1: 2},
@@ -182,7 +182,6 @@ assign(Tree.prototype, {
             var token = tokens.shift(),
                 next = tokens[0]
 
-            //if character is operand or (. push on the operandStack
             switch (token.name) {
                 case 'OTHER':
                     
@@ -259,6 +258,8 @@ assign(Tree.prototype, {
                         // o1 is right associative, and has precedence less than that of o2, 
                         } else if (associative === 'right' && precedence < last(stack).precedence) {
                             output.push( stack.pop() )
+                        } else {
+                            break
                         }
                     }
 

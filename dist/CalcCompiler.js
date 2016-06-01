@@ -47,6 +47,7 @@ assign(Compiler.prototype, {
             create a working expression
         */
 
+        console.log('nodes = ',JSON.stringify(nodes))
 
         /*
             Finally, return the output function
@@ -171,15 +172,10 @@ assign(Tree.prototype, {
 
     getExpressionNode: function (tokens) {
 
-        //http://csis.pace.edu/~murthy/ProgrammingProblems/16_Evaluation_of_infix_expressions
-        var operators = [],
-            operands = []
-
-        var proc = function () {
-            var values = [operands.pop(), operators.pop(), operands.pop()]
-
-            operands.concat(values)
-        }
+        // Shunting-yard algorithm
+        // https://en.wikipedia.org/wiki/Shunting-yard_algorithm
+        var stack = [],
+            output = []
 
         while (tokens.length > 0) {
 
@@ -189,29 +185,20 @@ assign(Tree.prototype, {
             //if character is operand or (. push on the operandStack
             switch (token.name) {
                 case 'OTHER':
-                    // check if token is identifier followed by (. If so, treat the function as an operator
-                    // and its arguments as operands. This is compatible with the Shunting-yard algorithm
-                    if (next.name === 'BEG_ARGS') {
-
-                        // then push the function token on to the operators stack
-                        if (operators.length === 0) {
-                            operators.push({
-                                type: 'func',
-                                precedence: 3,
-                                content: token.found
-                            })
-                        } else while ( 3 > last(operators).precedence ) {
-                            operators.push({
-                                type: 'func',
-                                precedence: 3,
-                                content: token.found
-                            })
-                        }
-
+                    if (token.found.match(/^\d/)) {
+                        output.push({
+                            type: 'NUM',
+                            content: token.found
+                        })
+                    } else if (next && next.name === 'BEG_ARGS') {
+                        stack.push({
+                            type: 'FUNC',
+                            content: token.found
+                        })
                     } else {
 
-                        operands.push({
-                            type: 'const',
+                        output.push({
+                            type: 'CONST',
                             content: token.found
                         })
 
@@ -221,53 +208,71 @@ assign(Tree.prototype, {
 
                 case 'BEG_ARGS':
 
-                    operators.push({
-                        type: 'open',
-                        precedence: 3,
+                    stack.push({
+                        type: 'BEG_ARGS',
                         content: token.found
                     })
 
                     break
 
-                case 'ARG_SEP':
+                case 'END_ARGS':
+                    while ( last(stack) && last(stack).type !== 'BEG_ARGS' ) {
+                        output.push( stack.pop() )
+                    }
+                    stack.push({
+                        type: 'END_ARGS',
+                        content: token.found
+                    })
+                    break
 
+                case 'ARG_SEP':
+                    while ( last(stack) && last(stack).type !== 'BEG_ARGS' ) {
+                        output.push( stack.pop() )
+                    }
+                    stack.push({
+                        type: 'ARG_SEP',
+                        content: token.found
+                    })
                     break
 
                 case 'OPERATOR':
-                    var precedence
+                    var precedence, associative
                     if (token.found === '*' || token.found === '/') {
                         precedence = 2
+                        associative = 'left'
                     } 
                     if (token.found === '+' || token.found === '-') {
                         precedence = 1
+                        associative = 'left'
                     }
-                    operators.push({
+
+                    while (last(stack) && last(stack).type === 'operator') {
+                        if (associative === 'left' && precedence <= last(stack).precedence ) {
+                            output.push( stack.pop() )
+                        } else if (associative === 'right' && precedence < last(stack).precedence) {
+                            output.push( stack.pop() )
+                        } else {
+                            break
+                        }
+                    }
+
+                    stack.push({
                         type: 'operator',
+                        associative: associative,
                         precedence: precedence,
                         content: token.found
                     })
                     break
-                case 'END_ARGS':
-                    proc()
-                    break
                 default:
-                    proc()
                     break
 
             }
 
         }
 
-        // if character is operand or (. push on the operandStack
-        return {
-            type: 'expression',
-            assignsTo: null,
-            // nodes can be functions or constants
-            nodes: {
-                operators: operators,
-                operands: operands
-            }
-        }
+        while (stack.length !== 0) output.push( stack.pop() )
+
+        return output
 
     }
 

@@ -126,26 +126,13 @@ assign(Tree.prototype, {
     */
     parse: function () {
 
-        var root = {
-            type: 'Root',
-            nodes: []
-        }
-
         // create a clone of the tokens array so it is not mutated
         var tokens = this.tokens.slice()
 
         // remove whitespace tokens. They aren't relevant
         this.removeWhitespaceTokens(tokens)
 
-        while (tokens.length > 0) {
-
-            root.nodes.push(
-                this.getExpressionNode(tokens)
-            )
-
-        }
-
-        return root
+        return this.getExpressionNode(tokens)
     },
 
     /*

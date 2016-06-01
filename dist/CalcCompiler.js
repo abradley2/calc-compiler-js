@@ -118,7 +118,8 @@ assign(Tokenizer.prototype, {
 module.exports = Tokenizer
 
 },{"./util/assign":9}],4:[function(require,module,exports){
-var assign = require('./util/assign')
+var assign = require('./util/assign'),
+    last = require('./util/last')
 
 function Tree (tokens) {
     this.tokens = tokens
@@ -167,139 +168,90 @@ assign(Tree.prototype, {
         return tokens
     },
 
-    /* 
-        Get a singular function argument.
-        Called by getFunctionArgs
-    */
-    getFunctionArgs: function (tokens, _args) {
-        args = args || []
-
-        var token = tokens.shift()
-
-        switch (token.name) {
-            case 'ARG_SEP':
-                return this.getFunctionArgs(tokens, args)
-            case 'OTHER':
-                args.push( this.getOtherNode(token, tokens) )
-                return this.getFunctionArgs(tokens, args)
-            case 'BEG_ARGS':
-                args.push( this.getExpressionNode(tokens) )
-                return this.getFunctionArgs(tokens, args)
-            case 'END_ARGS':
-                return args
-            default:
-                throw new Error('ERROR: unexpected end of arguments', token)
-        }
-        
-    },
-
-
-    /*
-        Get a function node
-        Called when an identifier is followed by a (
-        which signifies the beginning of an argument list or invocation
-    */
-    getFunctionNode: function (token, tokens) {
-        var begArgToken = tokens.shift()
-        console.log('GOT A FUNCTION', token)
-
-        // get all the args until the end parens is found
-        var args = this.getFunctionArgs(tokens)
-
-        return {
-            type: 'function',
-            // nodes can be constants or other functions
-            nodes: []
-        }
-
-    },
-
-    /*
-        Get a constant node
-        Called when a col/row lookup (identifier not followed by function args),
-        string, or number is found
-    */
-    getConstantNode: function (token, tokens) {
-        var next = tokens[0]
-        console.log('next = ',next)
-        if (next && next.name === 'BEG_ARGS') {
-
-            return this.getFunctionNode(token, tokens)
-
-        } else {
-
-            return {
-                type: 'constant',
-                content: token.found,
-                // constants do not have nodes
-                nodes: null
-            }
-
-        }
-
-    },
-
-    getOtherNode: function (token, tokens) {
-        // order is important here
-        if ( token.found.match(/^\d/) ) {
-        
-            return this.getConstantNode(token, tokens)
-        
-        } else if ( token.found.match(/^\w/) ) {
-        
-            return this.getIdentifierNode(token, tokens)
-        
-        } else if ( token.found.match(/^"/) ) {
-        
-            return this.getConstantNode(token, tokens)
-
-        } else {
-
-            throw new Error('ERROR: unidentified token: ', token)
-
-        }
-
-    },
-
-    getIdentifierNode: function (token, tokens) {
-        var next = tokens[0]
-
-        if (next && next.name === 'BEG_ARGS') {
-            return this.getFunctionNode(token, tokens)
-        } else {
-            return {
-                type: 'IDENTIFIER',
-                content: token.found,
-                nodes: null
-            }
-        }
-
-
-    },
 
     getExpressionNode: function (tokens) {
 
-        // http://stackoverflow.com/questions/13421424/how-to-evaluate-an-infix-expression-in-just-one-scan-using-stacks#answer-16068554
+        //http://csis.pace.edu/~murthy/ProgrammingProblems/16_Evaluation_of_infix_expressions
         var operators = [],
-            operands = [],
-            expressionEnd = false
+            operands = []
 
-        while (tokens.length > 0 && !expressionEnd) {
+        var proc = function () {
+            var values = [operands.pop(), operators.pop(), operands.pop()]
 
-            var token = tokens.shift()
+            operands.concat(values)
+        }
+
+        while (tokens.length > 0) {
+
+            var token = tokens.shift(),
+                next = tokens[0]
 
             //if character is operand or (. push on the operandStack
             switch (token.name) {
                 case 'OTHER':
-                    operands.push( this.getOtherNode(token, tokens) )
+                    // check if token is identifier followed by (. If so, treat the function as an operator
+                    // and its arguments as operands. This is compatible with the Shunting-yard algorithm
+                    if (next.name === 'BEG_ARGS') {
+
+                        // then push the function token on to the operators stack
+                        if (operators.length === 0) {
+                            operators.push({
+                                type: 'func',
+                                precedence: 3,
+                                content: token.found
+                            })
+                        } else while ( 3 > last(operators).precedence ) {
+                            operators.push({
+                                type: 'func',
+                                precedence: 3,
+                                content: token.found
+                            })
+                        }
+
+                    } else {
+
+                        operands.push({
+                            type: 'const',
+                            content: token.found
+                        })
+
+                    } 
+
                     break
+
                 case 'BEG_ARGS':
 
-                    break
-                case 'END_ARGS':
+                    operators.push({
+                        type: 'open',
+                        precedence: 3,
+                        content: token.found
+                    })
 
                     break
+
+                case 'ARG_SEP':
+
+                    break
+
+                case 'OPERATOR':
+                    var precedence
+                    if (token.found === '*' || token.found === '/') {
+                        precedence = 2
+                    } 
+                    if (token.found === '+' || token.found === '-') {
+                        precedence = 1
+                    }
+                    operators.push({
+                        type: 'operator',
+                        precedence: precedence,
+                        content: token.found
+                    })
+                    break
+                case 'END_ARGS':
+                    proc()
+                    break
                 default:
+                    proc()
                     break
 
             }
@@ -323,7 +275,7 @@ assign(Tree.prototype, {
 
 module.exports = Tree
 
-},{"./util/assign":9}],5:[function(require,module,exports){
+},{"./util/assign":9,"./util/last":11}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',
@@ -402,7 +354,7 @@ var grammar = function (delimiters) {
 
 module.exports = grammar(delimiters)
 
-},{"./configure/delimiters":5,"./util/getEscaped":10,"./util/pluck":11}],9:[function(require,module,exports){
+},{"./configure/delimiters":5,"./util/getEscaped":10,"./util/pluck":12}],9:[function(require,module,exports){
 function assign (target, source) {
 
     for (key in source) {
@@ -434,6 +386,12 @@ function getEscaped (str) {
 module.exports = getEscaped
 
 },{}],11:[function(require,module,exports){
+function last (collection) {
+    return collection[collection.length - 1]
+}
+
+module.exports = last
+},{}],12:[function(require,module,exports){
 function pluck (collection, prop) {
 
     return collection.map(function (item) {

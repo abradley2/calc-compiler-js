@@ -3,7 +3,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = '52+ADD(COL_1+2,7)*3'
+var testTemplate = 'SIN( MAX(2, 3) / 3 * PI)'
 
 var data = [
     {COL_1: 2},
@@ -185,12 +185,8 @@ assign(Tree.prototype, {
             //if character is operand or (. push on the operandStack
             switch (token.name) {
                 case 'OTHER':
-                    if (token.found.match(/^\d/)) {
-                        output.push({
-                            type: 'NUM',
-                            content: token.found
-                        })
-                    } else if (next && next.name === 'BEG_ARGS') {
+                    
+                    if (next && next.name === 'BEG_ARGS') {
                         stack.push({
                             type: 'FUNC',
                             content: token.found
@@ -219,40 +215,50 @@ assign(Tree.prototype, {
                     while ( last(stack) && last(stack).type !== 'BEG_ARGS' ) {
                         output.push( stack.pop() )
                     }
-                    stack.push({
-                        type: 'END_ARGS',
-                        content: token.found
-                    })
+                    if ( last(stack) && last(stack).type === 'BEG_ARGS') {
+                        stack.pop()
+                    }
+                    if ( last(stack) && last(stack).type === 'FUNC') {
+                        output.push( stack.pop() )
+                    }
                     break
 
                 case 'ARG_SEP':
+                    /*
+                        Until the token at the top of the stack is a left parenthesis, 
+                        pop operators off the 
+                        stack onto the output queue. 
+                    */
                     while ( last(stack) && last(stack).type !== 'BEG_ARGS' ) {
                         output.push( stack.pop() )
                     }
-                    stack.push({
-                        type: 'ARG_SEP',
-                        content: token.found
-                    })
+                    if ( stack.length === 0 || last(stack).type !== 'BEG_ARGS' ) {
+                        throw new Error('Missing openining  ( in arguments list')
+                    }
+
                     break
 
                 case 'OPERATOR':
                     var precedence, associative
                     if (token.found === '*' || token.found === '/') {
-                        precedence = 2
+                        precedence =3
                         associative = 'left'
                     } 
                     if (token.found === '+' || token.found === '-') {
-                        precedence = 1
+                        precedence = 2
                         associative = 'left'
                     }
 
+                    /*
+                        while there is an operator token o2, at the top of the operator stack and either
+                    */
                     while (last(stack) && last(stack).type === 'operator') {
+                        // o1 is left-associative and its precedence is less than or equal to that of o2, or...
                         if (associative === 'left' && precedence <= last(stack).precedence ) {
                             output.push( stack.pop() )
+                        // o1 is right associative, and has precedence less than that of o2, 
                         } else if (associative === 'right' && precedence < last(stack).precedence) {
                             output.push( stack.pop() )
-                        } else {
-                            break
                         }
                     }
 

@@ -3,7 +3,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = '52 + SUM(COL_100 - 8, 3) / 9'
+var testTemplate = 'SUM(COL_100 - 8, AVE(3, 1, 20), 4)'
 
 var data = [
     {COL_1: 2},
@@ -77,17 +77,6 @@ assign(Tokenizer.prototype, {
 
         while (template.length > 0) {
             template = this.yieldNextToken(template, stack)
-
-            /*
-                Once there's at least 2 elements on the stack, give each stack
-                element a reference to the previous one for convenience
-            */
-            if (stack.length >= 2) {
-                // for now, I don't think I need this
-                //stack[stack.length - 1].previous = stack[stack.length - 2]
-
-            }
-
         }
 
         return stack
@@ -175,7 +164,8 @@ assign(Tree.prototype, {
         // Shunting-yard algorithm
         // https://en.wikipedia.org/wiki/Shunting-yard_algorithm
         var stack = [],
-            output = []
+            output = [],
+            funcDepth = 0
 
         while (tokens.length > 0) {
 
@@ -188,12 +178,14 @@ assign(Tree.prototype, {
                     if (next && next.name === 'BEG_ARGS') {
                         stack.push({
                             type: 'FUNC',
+                            funcDepth: ++funcDepth,
                             content: token.found
                         })
                     } else {
 
                         output.push({
                             type: 'CONST',
+                            funcDepth: funcDepth,
                             content: token.found
                         })
 
@@ -218,6 +210,7 @@ assign(Tree.prototype, {
                         stack.pop()
                     }
                     if ( last(stack) && last(stack).type === 'FUNC') {
+                        --funcDepth
                         output.push( stack.pop() )
                     }
                     break

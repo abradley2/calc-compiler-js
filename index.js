@@ -2,7 +2,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = '52 + SUM(COL_100 - 8, 3) / 9'
+var testTemplate = 'SUM(COL_100 - 8, AVE(3, 1, 20), 4)'
 
 var data = [
     {COL_1: 2},

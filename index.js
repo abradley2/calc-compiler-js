@@ -1,8 +1,13 @@
+
 var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = 'SUM(COL_100 - 8, AVE(3, 1, 20), 4)'
+
+
+
+
+var testTemplate = 'SUM(COL_100 - 8, SUM(3, 1, 20), 4)'
 
 var data = [
     {COL_1: 2},
@@ -12,6 +17,8 @@ var data = [
 ]
 
 var outFunc = c.compileTemplate( testTemplate )
+
+
 
 data.map( outFunc, data )
 

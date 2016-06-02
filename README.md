@@ -22,6 +22,12 @@ var calcString = "=SUM(A, B)"
 var outputFunc = c.compile( calcString )
 ```
 
+
+### Adding functions
+
+To add functions, see lib/func
+
+
 **TODO: finish documentation**  
 
 ### Contributing

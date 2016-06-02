@@ -3,7 +3,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 
-var testTemplate = 'SUM(COL_100 - 8, AVE(3, 1, 20), 4)'
+var testTemplate = 'SUM(COL_100 - 8, SUM(3, 1, 20), 4)'
 
 var data = [
     {COL_1: 2},
@@ -23,7 +23,8 @@ var grammar = require('./grammar'),
     Tokenizer = require('./Tokenizer'),
     Tree = require('./Tree'),
     func = require('./func'),
-    assign = require('./util/assign')
+    assign = require('./util/assign'),
+    last = require('./util/last')
 
 function Compiler () {
 
@@ -47,14 +48,52 @@ assign(Compiler.prototype, {
             create a working expression
         */
 
-        console.log('nodes = ',JSON.stringify(nodes))
+        var operands = [],
+            stack = []
+
+        console.log(JSON.stringify(nodes))
+
+        while (nodes.length > 0) {
+            
+            var node = nodes.shift()
+
+            switch (node.type) {
+                case 'CONST':
+                    operands.push({
+                        type: 'CONST',
+
+                    })
+                    break
+                case 'FUNC':
+                    stack.push({
+                        'FUNC': [],
+                        'ARGUMENTS': []
+                    })
+                    while ( last(stack).funcDepth === last(operands).funcDepth ) {
+                        last(stack).ARGUMENTS.push( operands.pop() )
+                    }
+                case 'operator':
+                    stack.push({
+                        'OPERATOR': node.content,
+                        'OPERANDS': []
+                    })
+                    break
+                default:
+                    break
+            }
+        }
+
 
         /*
             Finally, return the output function
         */
-        return function (item) {
-            return item
+        return function (row) {
+            return row
         }
+
+    },
+
+    stackToFunction: function (stack) {
 
     }
 
@@ -62,7 +101,7 @@ assign(Compiler.prototype, {
 
 module.exports = Compiler
 
-},{"./Tokenizer":3,"./Tree":4,"./func":7,"./grammar":8,"./util/assign":9}],3:[function(require,module,exports){
+},{"./Tokenizer":3,"./Tree":4,"./func":12,"./grammar":13,"./util/assign":14,"./util/last":16}],3:[function(require,module,exports){
 var assign = require('./util/assign')
 
 function Tokenizer (grammar) {
@@ -107,7 +146,7 @@ assign(Tokenizer.prototype, {
 
 module.exports = Tokenizer
 
-},{"./util/assign":9}],4:[function(require,module,exports){
+},{"./util/assign":14}],4:[function(require,module,exports){
 var assign = require('./util/assign'),
     last = require('./util/last')
 
@@ -267,7 +306,7 @@ assign(Tree.prototype, {
 
 module.exports = Tree
 
-},{"./util/assign":9,"./util/last":11}],5:[function(require,module,exports){
+},{"./util/assign":14,"./util/last":16}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',
@@ -280,22 +319,129 @@ var delimiters = {
 module.exports = delimiters
 
 },{}],6:[function(require,module,exports){
-function SUM () {
-    var retVal = 0
+var assign = require('../util/assign')
 
-    for (var i = 0; i < arguments.length; i++) retVal += arguments[i]
+function DIFF (args, ctx) {
 
-    return retVal
 }
+
+assign(DIFF.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = DIFF
+
+},{"../util/assign":14}],7:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function POW (args, ctx) {
+
+}
+
+assign(POW.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = POW
+
+},{"../util/assign":14}],8:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function PROD (args, ctx) {
+
+}
+
+assign(PROD.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = PROD
+
+},{"../util/assign":14}],9:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function QUOT (args, ctx) {
+
+}
+
+assign(QUOT.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = QUOT
+
+},{"../util/assign":14}],10:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function ROOT (ctx, funcs) {
+    this.ctx = ctx
+    this.funcs = funcs
+}
+
+assign(ROOT.prototype, {
+
+    compile: function () {
+        /*
+            TODO: finish string compilation
+            honestly, shouldn't really need this.
+            But nice extra feature.
+        */
+
+        // need to return the functions as a proper closure.
+        return (
+            ";(function(){" +
+                "var ctx = " + JSON.stringify(this.ctx) +
+            "});"
+        )
+    }
+
+})
+
+module.exports = ROOT
+},{"../util/assign":14}],11:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function SUM (args, ctx) {
+
+}
+
+assign(SUM.prototype, {
+
+    compile: function () {
+
+    }
+
+})
 
 module.exports = SUM
 
-},{}],7:[function(require,module,exports){
+},{"../util/assign":14}],12:[function(require,module,exports){
 module.exports = {
-    'SUM': require('./SUM')
+    'SUM': require('./SUM'),
+    'DIFF': require('./DIFF'),
+    'QUOT': require('./QUOT'),
+    'PROD': require('./PROD'),
+    'POW': require('./POW'),
+    'ROOT': require('./ROOT')
 }
 
-},{"./SUM":6}],8:[function(require,module,exports){
+},{"./DIFF":6,"./POW":7,"./PROD":8,"./QUOT":9,"./ROOT":10,"./SUM":11}],13:[function(require,module,exports){
 var getEscaped = require('./util/getEscaped'),
     delimiters = require('./configure/delimiters'),
     pluck = require('./util/pluck')
@@ -346,7 +492,7 @@ var grammar = function (delimiters) {
 
 module.exports = grammar(delimiters)
 
-},{"./configure/delimiters":5,"./util/getEscaped":10,"./util/pluck":12}],9:[function(require,module,exports){
+},{"./configure/delimiters":5,"./util/getEscaped":15,"./util/pluck":17}],14:[function(require,module,exports){
 function assign (target, source) {
 
     for (key in source) {
@@ -364,7 +510,7 @@ function assign (target, source) {
 
 module.exports = assign
 
-},{}],10:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 function getEscaped (str) {
     /*
         basically any special character I want to escape, preceded by a \
@@ -377,13 +523,13 @@ function getEscaped (str) {
 
 module.exports = getEscaped
 
-},{}],11:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 function last (collection) {
     return collection[collection.length - 1]
 }
 
 module.exports = last
-},{}],12:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 function pluck (collection, prop) {
 
     return collection.map(function (item) {

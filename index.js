@@ -1,13 +1,7 @@
-
 var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
-
-
-
-
-
-var testTemplate = 'SUM(COL_100 - 8, SUM(3, 1, 20), 4)'
+var testTemplate = 'SUM(1 - ZERO() - 8, SUM(3, 1, 20), 4)'
 
 var data = [
     {COL_1: 2},
@@ -16,10 +10,8 @@ var data = [
     {COL_1: 43}
 ]
 
-var outFunc = c.compileTemplate( testTemplate )
+var outStack = c.getStack( testTemplate )
 
-
-
-data.map( outFunc, data )
+console.log(JSON.stringify(outStack))
 
 module.exports = Compiler

@@ -2,8 +2,7 @@
 var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
-
-var testTemplate = 'SUM(COL_100 - 8, SUM(3, 1, 20), 4)'
+var testTemplate = 'SUM(ZERO() - 8, SUM(3, 1, 20), 4)'
 
 var data = [
     {COL_1: 2},
@@ -12,9 +11,9 @@ var data = [
     {COL_1: 43}
 ]
 
-var outFunc = c.compileTemplate( testTemplate )
+var outStack = c.getStack( testTemplate )
 
-data.map( outFunc, data )
+console.log(JSON.stringify(outStack))
 
 module.exports = Compiler
 
@@ -24,7 +23,14 @@ var grammar = require('./grammar'),
     Tree = require('./Tree'),
     func = require('./func'),
     assign = require('./util/assign'),
+    omit = require('./util/omit'),
+    getIndexBy = require('./util/getIndexBy'),
     last = require('./util/last')
+
+
+function cleanStackNode (node) {
+    return omit(node, 'funcDepth')
+}
 
 function Compiler () {
 
@@ -34,13 +40,11 @@ function Compiler () {
 
 assign(Compiler.prototype, {
 
-    compileTemplate: function (template) {
+    getStack: function (template) {
 
-        var tokens = this.tokenizer.getTokens(template)
-
-        var tree = new Tree(tokens)
-
-        var nodes = tree.parse()
+        var tokens = this.tokenizer.getTokens(template),
+            tree = new Tree(tokens),
+            nodes = tree.parse()
 
         /*
             now use the functions in /func
@@ -51,31 +55,36 @@ assign(Compiler.prototype, {
         var operands = [],
             stack = []
 
-        console.log(JSON.stringify(nodes))
-
         while (nodes.length > 0) {
             
-            var node = nodes.shift()
+            var node = nodes.shift(),
+                args = []
 
             switch (node.type) {
                 case 'CONST':
                     operands.push({
                         type: 'CONST',
-
+                        funcDepth: node.funcDepth,
+                        content: node.content
                     })
                     break
                 case 'FUNC':
+                    args = operands.splice( getIndexBy(operands, {funcDepth: node.funcDepth}) )
+
                     stack.push({
-                        'FUNC': [],
-                        'ARGUMENTS': []
+                        type: 'FUNC',
+                        content: node.content,
+                        args: args.map(cleanStackNode)
                     })
-                    while ( last(stack).funcDepth === last(operands).funcDepth ) {
-                        last(stack).ARGUMENTS.push( operands.pop() )
-                    }
-                case 'operator':
+                    break
+                case 'OPERATOR':
+                    args = operands.splice()
+
                     stack.push({
-                        'OPERATOR': node.content,
-                        'OPERANDS': []
+                        type: 'OPERATOR',
+                        content: node.content,
+                        args: args.map(cleanStackNode)
+
                     })
                     break
                 default:
@@ -83,25 +92,29 @@ assign(Compiler.prototype, {
             }
         }
 
-
-        /*
-            Finally, return the output function
-        */
-        return function (row) {
-            return row
-        }
+        return stack
 
     },
 
-    stackToFunction: function (stack) {
+    getFunc: function (stack) {
 
+    },
+
+    compile: function () {
+        /* 
+            Going to omit the actual compilation to a string. 
+            This is best used to create and use functions in 
+            memory. 
+
+            Eval is evil.
+        */
     }
 
 })
 
 module.exports = Compiler
 
-},{"./Tokenizer":3,"./Tree":4,"./func":12,"./grammar":13,"./util/assign":14,"./util/last":16}],3:[function(require,module,exports){
+},{"./Tokenizer":3,"./Tree":4,"./func":12,"./grammar":13,"./util/assign":14,"./util/getIndexBy":16,"./util/last":18,"./util/omit":19}],3:[function(require,module,exports){
 var assign = require('./util/assign')
 
 function Tokenizer (grammar) {
@@ -246,6 +259,9 @@ assign(Tree.prototype, {
                         Until the token at the top of the stack is a left parenthesis, 
                         pop operators off the 
                         stack onto the output queue. 
+
+                        An argument separator essentially works as a closing parentheses
+                        that does not terminate the parsing of function arguments
                     */
                     while ( last(stack) && last(stack).type !== 'BEG_ARGS' ) {
                         output.push( stack.pop() )
@@ -270,7 +286,7 @@ assign(Tree.prototype, {
                     /*
                         while there is an operator token o2, at the top of the operator stack and either
                     */
-                    while (last(stack) && last(stack).type === 'operator') {
+                    while (last(stack) && last(stack).type === 'OPERATOR') {
                         // o1 is left-associative and its precedence is less than or equal to that of o2, or...
                         if (associative === 'left' && precedence <= last(stack).precedence ) {
                             output.push( stack.pop() )
@@ -283,7 +299,7 @@ assign(Tree.prototype, {
                     }
 
                     stack.push({
-                        type: 'operator',
+                        type: 'OPERATOR',
                         associative: associative,
                         precedence: precedence,
                         content: token.found
@@ -306,7 +322,7 @@ assign(Tree.prototype, {
 
 module.exports = Tree
 
-},{"./util/assign":14,"./util/last":16}],5:[function(require,module,exports){
+},{"./util/assign":14,"./util/last":18}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',
@@ -492,7 +508,7 @@ var grammar = function (delimiters) {
 
 module.exports = grammar(delimiters)
 
-},{"./configure/delimiters":5,"./util/getEscaped":15,"./util/pluck":17}],14:[function(require,module,exports){
+},{"./configure/delimiters":5,"./util/getEscaped":15,"./util/pluck":20}],14:[function(require,module,exports){
 function assign (target, source) {
 
     for (key in source) {
@@ -524,12 +540,61 @@ function getEscaped (str) {
 module.exports = getEscaped
 
 },{}],16:[function(require,module,exports){
+var keys = require('./keys')
+
+function getIndexBy (collection, predicate) {
+    var idx = -1,
+        keyName = keys(predicate)[0],
+        valName = predicate[keyName]
+
+    collection.some(function (item, i) {
+        if (item[keyName] === valName) {
+            idx = i
+            return true
+        } else {
+            return false
+        }
+    })
+
+
+    return idx
+
+}
+
+module.exports = getIndexBy
+},{"./keys":17}],17:[function(require,module,exports){
+function keys (obj) {
+    return Object.keys(obj)
+}
+
+module.exports = keys
+},{}],18:[function(require,module,exports){
 function last (collection) {
     return collection[collection.length - 1]
 }
 
 module.exports = last
-},{}],17:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
+function omit (obj, keys) {
+
+    var retVal = {}
+
+    if (typeof keys === 'string') keys = [keys]
+
+    Object.keys(obj).forEach(function (key) {
+
+        if (keys.indexOf(key) === -1) {
+            retVal[key] = obj[key]
+        }
+
+    })
+
+    return retVal
+
+}
+
+module.exports = omit
+},{}],20:[function(require,module,exports){
 function pluck (collection, prop) {
 
     return collection.map(function (item) {

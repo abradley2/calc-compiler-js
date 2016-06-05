@@ -19,13 +19,21 @@ var c = new Jcalc()
 
 var calcString = "=SUM(A, B)"
 
-var outputFunc = c.compile( calcString )
+// Get a JSON-serializable representation of the function stack.
+var stack = c.compile( calcString )
+
+// Get a usable function from the stack
+var func = c.generate( stack )
+
+// you can now use the function on an object representing a table row
+var row = {A: 1, B: 2}
+
+row.C = func(row)
+
+// return {A: 1, B: 2, C: 3}
 ```
 
-
 ### Adding functions
-
-To add functions, see lib/func
 
 
 **TODO: finish documentation**  

@@ -2,7 +2,8 @@
 var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
-var testTemplate = 'SUM(ZERO() - 8, SUM(3, 1, 20), 4)'
+//var testTemplate = 'SUM(1 - ZERO() - 8, SUM(3, 1, 20), 4)'
+var testTemplate = 'SUM(1, 2 * 3)'
 
 var data = [
     {COL_1: 2},
@@ -11,9 +12,7 @@ var data = [
     {COL_1: 43}
 ]
 
-var outStack = c.getStack( testTemplate )
-
-console.log(JSON.stringify(outStack))
+var outStack = c.parse( testTemplate )
 
 module.exports = Compiler
 
@@ -27,6 +26,13 @@ var grammar = require('./grammar'),
     getIndexBy = require('./util/getIndexBy'),
     last = require('./util/last')
 
+var funcMap = {
+    '-': 'DIFF',
+    '+': 'SUM',
+    '*': 'PROD',
+    '/': 'QUOT',
+    '^': 'POW'
+}
 
 function cleanStackNode (node) {
     return omit(node, 'funcDepth')
@@ -40,20 +46,34 @@ function Compiler () {
 
 assign(Compiler.prototype, {
 
-    getStack: function (template) {
+    /*
+        Small issue with RNP is it has trouble dealing with functions that
+        take a variable amount of arguments. So in the Shunting yard 
+        process in the Tree generator, a funcDepth attribute was added while
+        parsing the arguments to keep track of which args belonged to which 
+        function
+    */
+    _getFunctionArgs: function (funcNode, operands) {
+        var argIdx = getIndexBy(operands, {funcDepth: funcNode.funcDepth}),
+            args = []
+
+        if (argIdx !== -1) {
+            args = operands.splice(argIdx)
+        }
+
+        return args
+    },
+
+    parse: function (template) {
 
         var tokens = this.tokenizer.getTokens(template),
             tree = new Tree(tokens),
             nodes = tree.parse()
 
-        /*
-            now use the functions in /func
-            to sub in for function nodes and
-            create a working expression
-        */
-
         var operands = [],
             stack = []
+
+        console.log('NODES = ',nodes)
 
         while (nodes.length > 0) {
             
@@ -69,22 +89,20 @@ assign(Compiler.prototype, {
                     })
                     break
                 case 'FUNC':
-                    args = operands.splice( getIndexBy(operands, {funcDepth: node.funcDepth}) )
-
                     stack.push({
                         type: 'FUNC',
                         content: node.content,
-                        args: args.map(cleanStackNode)
+                        args: this._getFunctionArgs(node, operands)//args.map(cleanStackNode)
                     })
                     break
                 case 'OPERATOR':
-                    args = operands.splice()
-
+                    /*
+                        Convert operators to appropriate functions
+                    */
                     stack.push({
-                        type: 'OPERATOR',
-                        content: node.content,
-                        args: args.map(cleanStackNode)
-
+                        type: 'FUNC',
+                        content: funcMap[node.content],
+                        args: operands.splice(0)//args.map(cleanStackNode)
                     })
                     break
                 default:
@@ -96,11 +114,7 @@ assign(Compiler.prototype, {
 
     },
 
-    getFunc: function (stack) {
-
-    },
-
-    compile: function () {
+    generate: function () {
         /* 
             Going to omit the actual compilation to a string. 
             This is best used to create and use functions in 
@@ -204,7 +218,7 @@ assign(Tree.prototype, {
         // https://en.wikipedia.org/wiki/Shunting-yard_algorithm
         var stack = [],
             output = [],
-            funcDepth = 0
+            arity = []
 
         while (tokens.length > 0) {
 
@@ -215,16 +229,15 @@ assign(Tree.prototype, {
                 case 'OTHER':
                     
                     if (next && next.name === 'BEG_ARGS') {
+                        arity.push(1)
                         stack.push({
                             type: 'FUNC',
-                            funcDepth: ++funcDepth,
                             content: token.found
                         })
                     } else {
 
                         output.push({
                             type: 'CONST',
-                            funcDepth: funcDepth,
                             content: token.found
                         })
 
@@ -249,12 +262,19 @@ assign(Tree.prototype, {
                         stack.pop()
                     }
                     if ( last(stack) && last(stack).type === 'FUNC') {
-                        --funcDepth
-                        output.push( stack.pop() )
+                        var func = stack.pop()
+                        func.arity = arity.pop()
+                        output.push( func )
                     }
                     break
 
                 case 'ARG_SEP':
+                    if (arity.length > 0) {
+                        ++arity[arity.length - 1]
+                    } else {
+                        throw new Error('Unexpected comma outside argument list')
+                    }
+
                     /*
                         Until the token at the top of the stack is a left parenthesis, 
                         pop operators off the 
@@ -275,7 +295,7 @@ assign(Tree.prototype, {
                 case 'OPERATOR':
                     var precedence, associative
                     if (token.found === '*' || token.found === '/') {
-                        precedence =3
+                        precedence = 3
                         associative = 'left'
                     } 
                     if (token.found === '+' || token.found === '-') {

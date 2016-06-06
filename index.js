@@ -2,7 +2,7 @@ var Compiler = require('./lib/Compiler'),
     c = new Compiler()
 
 //var testTemplate = 'SUM(1 - ZERO() - 8, SUM(3, 1, 20), 4)'
-var testTemplate = 'SUM(1, 2 * 3)'
+var testTemplate = 'SUM(A, 2 * B)'
 
 var data = [
     {A: 2, B: 3},
@@ -14,5 +14,7 @@ var data = [
 var outStack = c.parse( testTemplate )
 
 var outFunc = c.generate( outStack )
+
+var result = outFunc( data[0] )
 
 module.exports = Compiler

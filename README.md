@@ -2,7 +2,7 @@
 
 # JavaScript Calc-Compile
 
-Simple compiler for turning excel-style field calculation strings into
+Simple interpreter for turning excel-style field calculation strings into
 JavaScript functions that can act on data-set collections.
 
 ### Purpose
@@ -15,6 +15,7 @@ examples: Microsoft Excel and LibreOffice Calc)
 ### A humble example
 
 ```
+// Create an instance of the generator
 var c = new Jcalc()
 
 var calcString = "=SUM(A, B)"

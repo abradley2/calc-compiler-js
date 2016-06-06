@@ -17,4 +17,6 @@ var outFunc = c.generate( outStack )
 
 var result = outFunc( data[0] )
 
+console.log('result = ',result)
+
 module.exports = Compiler

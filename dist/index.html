@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Demo</title>
+    <link rel='stylesheet' type='text/css' href='https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.0/css/bootstrap.css' />
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mithril/0.2.5/mithril.min.js'></script>
+
+</head>
+<body>
+
+
+
+
+<script type='text/javascript'>
+document.addEventListener('DOMContentLoaded', function () {
+
+
+function ViewModel () {
+
+    this.calcStack = m.prop()
+    this.calcFunc = m.prop()
+
+    this.dataSource = m.prop([
+        {A: 1, B: 2, C: 4, D: null}
+    ])
+}
+
+function EditorView (ctrl, args) {
+    return m('div.input-group', [
+        m('button', '='),
+        m('input[type="text"].form-control', {
+            onchange: function (e) {
+
+            }
+        })
+    ])
+}
+
+function TableView (ctrl, args) {
+    return m('table.table', [
+
+        m('thead', [
+
+            m('tr', Object.keys(args.data[0]).map( function (column) {
+
+                return m('th', column)
+
+            }).concat([
+
+                m('input[type="text"].form-control', {
+                    onchange: function (e) {
+                        
+                    }
+                })
+
+            ]) )
+
+        ]),
+
+        m('tbody', args.data.map( function (row) {
+
+            return m('tr', Object.keys(row).map( function (column) {
+
+                return m('td', column)
+
+            }) )
+
+        }) )
+
+    ])
+}
+
+function PageController () {
+
+}
+
+function PageView () {
+    return m('div.container', [
+        m(EditorView),
+        m(TableView)
+    ])
+}
+
+
+})
+</script>
+
+</body>
+</html>

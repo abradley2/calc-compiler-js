@@ -1,24 +1,5 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.CALC = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var Compiler = require('./lib/Compiler'),
-    c = new Compiler()
-
-//var testTemplate = 'SUM(1 - 8, DIFF(3, 1, 20), 4 * price)'
-var testTemplate = 'SUM(A, 2 * B)'
-
-var data = [
-    {A: 2, B: 3},
-    {A: 7, B: 8},
-    {A: 1, B: 1},
-    {A: 43, B: 19}
-]
-
-var outStack = c.parse( testTemplate )
-
-var outFunc = c.generate( outStack )
-
-var result = outFunc( data[0] )
-
-console.log('result = ', result)
+var Compiler = require('./lib/Compiler')
 
 module.exports = Compiler
 
@@ -114,7 +95,7 @@ assign(Compiler.prototype, {
 
 module.exports = Compiler
 
-},{"./Tokenizer":3,"./Tree":4,"./func":11,"./grammar":12,"./util/assign":13,"./util/getIndexBy":15,"./util/last":17,"./util/omit":18}],3:[function(require,module,exports){
+},{"./Tokenizer":3,"./Tree":4,"./func":15,"./grammar":16,"./util/assign":17,"./util/getIndexBy":19,"./util/last":21,"./util/omit":22}],3:[function(require,module,exports){
 var assign = require('./util/assign')
 
 function Tokenizer (grammar) {
@@ -159,7 +140,7 @@ assign(Tokenizer.prototype, {
 
 module.exports = Tokenizer
 
-},{"./util/assign":13}],4:[function(require,module,exports){
+},{"./util/assign":17}],4:[function(require,module,exports){
 var assign = require('./util/assign'),
     last = require('./util/last')
 
@@ -323,7 +304,7 @@ assign(Tree.prototype, {
 
 module.exports = Tree
 
-},{"./util/assign":13,"./util/last":17}],5:[function(require,module,exports){
+},{"./util/assign":17,"./util/last":21}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',
@@ -333,6 +314,28 @@ var delimiters = {
 module.exports = delimiters
 
 },{}],6:[function(require,module,exports){
+var assign = require('../util/assign')
+
+var SUM = require('./SUM')
+
+function AVE (args, ctx) {
+    var total = args.length,
+        sum = SUM(args, ctx)
+
+    return (sum / total)
+
+}
+
+assign(AVE.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = AVE
+},{"../util/assign":17,"./SUM":14}],7:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function DIFF (args, ctx) {
@@ -364,11 +367,70 @@ assign(DIFF.prototype, {
 
 module.exports = DIFF
 
-},{"../util/assign":13}],7:[function(require,module,exports){
+},{"../util/assign":17}],8:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function MAX (args, ctx) {
+
+    var vals = []
+
+    args.forEach(function (arg) {
+        if (arg.type === 'VAR') {
+            vals.push( ctx[arg.name] )
+        } else {
+            vals.push( arg.value )
+        }
+    })
+
+    return Math.max.apply(Math, vals)
+
+}
+
+assign(MAX.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = MAX
+},{"../util/assign":17}],9:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function MIN (args, ctx) {
+
+    var vals = []
+
+    args.forEach(function (arg) {
+        if (arg.type === 'VAR') {
+            vals.push( ctx[arg.name] )
+        } else {
+            vals.push( arg.value )
+        }
+    })
+
+    return Math.min.apply(Math, vals)
+
+}
+
+assign(MIN.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = MIN
+},{"../util/assign":17}],10:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function POW (args, ctx) {
+    var base = args[0],
+        exponent = args[1]
 
+    return Math.pow(base, exponent) 
 }
 
 assign(POW.prototype, {
@@ -381,7 +443,7 @@ assign(POW.prototype, {
 
 module.exports = POW
 
-},{"../util/assign":13}],8:[function(require,module,exports){
+},{"../util/assign":17}],11:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function PROD (args, ctx) {
@@ -408,11 +470,25 @@ assign(PROD.prototype, {
 
 module.exports = PROD
 
-},{"../util/assign":13}],9:[function(require,module,exports){
+},{"../util/assign":17}],12:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function QUOT (args, ctx) {
+    var retVal
 
+    args.forEach(function (arg) {
+        var mod
+
+        if (arg.type === 'VAR') {
+            mod = parseFloat(ctx[arg.name])
+        } else {
+            mod = parseFloat(arg.value)
+        }
+
+        if (retVal) { retVal = retVal / mod } else { retVal = mod }
+    })
+
+    return retVal
 }
 
 assign(QUOT.prototype, {
@@ -425,7 +501,27 @@ assign(QUOT.prototype, {
 
 module.exports = QUOT
 
-},{"../util/assign":13}],10:[function(require,module,exports){
+},{"../util/assign":17}],13:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function SQRT (args, ctx) {
+    if (args[0].type === 'VAR') {
+        return Math.sqrt( ctx[args[0].name] )
+    } else {
+        return Math.sqrt( args[0].value )
+    }
+}
+
+assign(SQRT.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = SQRT
+},{"../util/assign":17}],14:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function SUM (args, ctx) {
@@ -454,16 +550,20 @@ assign(SUM.prototype, {
 
 module.exports = SUM
 
-},{"../util/assign":13}],11:[function(require,module,exports){
+},{"../util/assign":17}],15:[function(require,module,exports){
 module.exports = {
     'SUM': require('./SUM'),
     'DIFF': require('./DIFF'),
     'QUOT': require('./QUOT'),
     'PROD': require('./PROD'),
-    'POW': require('./POW')
+    'POW': require('./POW'),
+    'AVE': require('./AVE'),
+    'SQRT': require('./SQRT'),
+    'MIN': require('./MIN'),
+    'MAX': require('./MAX')
 }
 
-},{"./DIFF":6,"./POW":7,"./PROD":8,"./QUOT":9,"./SUM":10}],12:[function(require,module,exports){
+},{"./AVE":6,"./DIFF":7,"./MAX":8,"./MIN":9,"./POW":10,"./PROD":11,"./QUOT":12,"./SQRT":13,"./SUM":14}],16:[function(require,module,exports){
 var getEscaped = require('./util/getEscaped'),
     delimiters = require('./configure/delimiters'),
     pluck = require('./util/pluck')
@@ -514,7 +614,7 @@ var grammar = function (delimiters) {
 
 module.exports = grammar(delimiters)
 
-},{"./configure/delimiters":5,"./util/getEscaped":14,"./util/pluck":19}],13:[function(require,module,exports){
+},{"./configure/delimiters":5,"./util/getEscaped":18,"./util/pluck":23}],17:[function(require,module,exports){
 function assign (target, source) {
 
     for (key in source) {
@@ -532,7 +632,7 @@ function assign (target, source) {
 
 module.exports = assign
 
-},{}],14:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 function getEscaped (str) {
     /*
         basically any special character I want to escape, preceded by a \
@@ -545,7 +645,7 @@ function getEscaped (str) {
 
 module.exports = getEscaped
 
-},{}],15:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 var keys = require('./keys')
 
 function getIndexBy (collection, predicate) {
@@ -568,19 +668,19 @@ function getIndexBy (collection, predicate) {
 }
 
 module.exports = getIndexBy
-},{"./keys":16}],16:[function(require,module,exports){
+},{"./keys":20}],20:[function(require,module,exports){
 function keys (obj) {
     return Object.keys(obj)
 }
 
 module.exports = keys
-},{}],17:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 function last (collection) {
     return collection[collection.length - 1]
 }
 
 module.exports = last
-},{}],18:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 function omit (obj, keys) {
 
     var retVal = {}
@@ -600,7 +700,7 @@ function omit (obj, keys) {
 }
 
 module.exports = omit
-},{}],19:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 function pluck (collection, prop) {
 
     return collection.map(function (item) {

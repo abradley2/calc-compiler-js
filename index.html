@@ -15,10 +15,6 @@
 <body>
 
 
-
-
-
-
 <script type='text/javascript'>
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -35,7 +31,7 @@ function getEditor (args) {
                     var stack = calc.parse(e.target.value),
                         func = calc.generate(stack)
 
-                    args.onoutput(func, stack)
+                    args.onoutput(func, JSON.stringify(stack))
                 } catch (e) {
                     args.onerror(e)
                 }
@@ -89,28 +85,38 @@ var app = {
 
         this.error = m.prop()
 
+        this.astJSON = m.prop()
+
     },
 
     view: function (ctrl) {
 
         return m('div.container', [
             (
+                ctrl.astJSON()
+                ? m('div.alert.alert-info', [
+                    m('code', ctrl.astJSON())
+                ])
+                : null
+            ),
+            (
                 ctrl.error()
-                ? m('div.alert.alert-warning', [
+                ? m('div.alert.alert-danger', [
                     m('span', ctrl.error())
                 ])
                 : null
             ),
             Table({
                 model: ctrl.model,
-                onoutput: function (func, json) {
-                    console.log(json)
+                onoutput: function (func, astJSON) {
                     ctrl.error(false)
+                    ctrl.astJSON(astJSON)
                     ctrl.model().forEach(function (item) {
                         item.D = func(item)
                     })
                 },
                 onerror: function (e) {
+                    ctrl.astJSON(false)
                     ctrl.error(e)
                 }
             })

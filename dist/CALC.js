@@ -1,6 +1,12 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.CALC = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var Compiler = require('./lib/Compiler')
 
+var c = new Compiler()
+
+var test = 'SUM("one", 1)'
+
+var stack = c.parse(test)
+
 module.exports = Compiler
 
 },{"./lib/Compiler":2}],2:[function(require,module,exports){
@@ -35,9 +41,9 @@ assign(Compiler.prototype, {
             tree = new Tree(tokens),
             nodes = tree.parse()
 
-        /*
-            Simple cleanup to get everything in order
-        */
+        console.log('nodes = ',nodes)
+
+        // simple cleanup of the nodes
         var stack = nodes.map(function (node) {
             if (node.type === 'OPERATOR') {
                 node = {
@@ -63,14 +69,25 @@ assign(Compiler.prototype, {
 
             stack.forEach(function (node, idx) {
 
-                if (node.type === 'VAR' || node.type === 'CONST') {
+                // if the node is a variable or constant
+                // put it on the operator stack
+                if (node.type !== 'FUNC') {
+
                     operands.push(node)
                 }
+                // if the node is a function
+                // execute the function, then store
+                // its result as a const on the
+                // operand stack
                 if (node.type === 'FUNC') {
-                    // execute the function, then store
-                    // its result as a const on the
-                    // operand stack
+                    // use the arity of the function to
+                    // determine how many operands must
+                    // be retrieved from the stack to use
+                    // as arguments
 
+                    // use the function name to figure
+                    // out which function in funcLib
+                    // to apply
                     var start = operands.length - node.arity,
                         count = node.arity,
                         args = operands.splice(start, count),
@@ -78,6 +95,7 @@ assign(Compiler.prototype, {
 
                     var result = func(args, ctx)
 
+                    // then push the result on the operand stack
                     operands.push({
                         type: 'CONST',
                         value: result
@@ -89,13 +107,22 @@ assign(Compiler.prototype, {
             return last(operands).value
         }
 
+    },
+
+    compile: function (_stack) {
+
+        return ('function (row) {' +
+            this.importClosure() +
+
+        '}')
+
     }
 
 })
 
 module.exports = Compiler
 
-},{"./Tokenizer":3,"./Tree":4,"./func":15,"./grammar":16,"./util/assign":17,"./util/getIndexBy":19,"./util/last":21,"./util/omit":22}],3:[function(require,module,exports){
+},{"./Tokenizer":3,"./Tree":4,"./func":19,"./grammar":20,"./util/assign":21,"./util/getIndexBy":23,"./util/last":25,"./util/omit":26}],3:[function(require,module,exports){
 var assign = require('./util/assign')
 
 function Tokenizer (grammar) {
@@ -118,7 +145,7 @@ assign(Tokenizer.prototype, {
 
     yieldNextToken: function (template, stack) {
 
-        this.grammar.some(function (grammarObj) {
+        var parsed = this.grammar.some(function (grammarObj) {
 
             var match = grammarObj.test.exec(template)
 
@@ -126,12 +153,18 @@ assign(Tokenizer.prototype, {
                 template = template.replace(grammarObj.test, '')
                 stack.push({
                     name: grammarObj.name,
-                    found: match[0]
+                    found: match[1]
                 })
                 return true
+            } else {
+                return false
             }
 
         })
+
+        if (!parsed) {
+            throw new Error('Error: unexpected token')
+        }
 
         return template
     }
@@ -140,7 +173,7 @@ assign(Tokenizer.prototype, {
 
 module.exports = Tokenizer
 
-},{"./util/assign":17}],4:[function(require,module,exports){
+},{"./util/assign":21}],4:[function(require,module,exports){
 var assign = require('./util/assign'),
     last = require('./util/last')
 
@@ -169,21 +202,6 @@ assign(Tree.prototype, {
         return tokens
     },
 
-    getConst: function (token) {
-        if (token.found.match(/^[a-zA-Z]/)) {
-            return {
-                type: 'VAR',
-                name: token.found
-            }
-        } else {
-            return {
-                type: 'CONST',
-                value: token.found
-            }
-        }
-    },
-
-
     getExpressionNode: function (tokens) {
 
         // Shunting-yard algorithm
@@ -198,7 +216,7 @@ assign(Tree.prototype, {
                 next = tokens[0]
 
             switch (token.name) {
-                case 'OTHER':
+                case 'IDENTIFIER':
                     
                     if (next && next.name === 'BEG_ARGS') {
                         arity.push(1)
@@ -207,8 +225,25 @@ assign(Tree.prototype, {
                             name: token.found
                         })
                     } else {
-                        output.push(this.getConst(token))
+                        output.push({
+                            type: 'VAR',
+                            name: token.found
+                        })
                     } 
+                    break
+
+                case 'STRING':
+                    output.push({
+                        type: 'STRING',
+                        value: token.found
+                    })
+                    break
+
+                case 'NUMBER':
+                    output.push({
+                        type: 'NUMBER',
+                        value: parseFloat(token.found)
+                    })
                     break
 
                 case 'BEG_ARGS':
@@ -304,7 +339,7 @@ assign(Tree.prototype, {
 
 module.exports = Tree
 
-},{"./util/assign":17,"./util/last":21}],5:[function(require,module,exports){
+},{"./util/assign":21,"./util/last":25}],5:[function(require,module,exports){
 var delimiters = {
     BEG_ARGS: '(',
     END_ARGS: ')',
@@ -335,7 +370,28 @@ assign(AVE.prototype, {
 })
 
 module.exports = AVE
-},{"../util/assign":17,"./SUM":14}],7:[function(require,module,exports){
+},{"../util/assign":21,"./SUM":17}],7:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function CONCAT (args, ctx) {
+
+    console.log('args = ',args)
+
+    var parsedArgs = args.map(function (arg) {
+        console.log('args = ',args)
+        if (arg.value) {
+            return arg.value
+        } else {
+            return ctx[arg.name]
+        }
+    })
+
+    return ('').concat(parsedArgs)
+
+}
+
+module.exports = CONCAT
+},{"../util/assign":21}],8:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function DIFF (args, ctx) {
@@ -360,14 +416,34 @@ function DIFF (args, ctx) {
 assign(DIFF.prototype, {
 
     compile: function () {
-
+        return this.toString()
     }
 
 })
 
 module.exports = DIFF
 
-},{"../util/assign":17}],8:[function(require,module,exports){
+},{"../util/assign":21}],9:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function LOWER (args, ctx) {
+    if (args[0].type === 'VAR') {
+        return ctx[args[0].name].toLowerCase()
+    } else {
+        return args[0].value.toLowerCase()
+    }
+}
+
+assign(LOWER.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = LOWER
+},{"../util/assign":21}],10:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function MAX (args, ctx) {
@@ -389,13 +465,13 @@ function MAX (args, ctx) {
 assign(MAX.prototype, {
 
     compile: function () {
-
+    
     }
 
 })
 
 module.exports = MAX
-},{"../util/assign":17}],9:[function(require,module,exports){
+},{"../util/assign":21}],11:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function MIN (args, ctx) {
@@ -423,12 +499,12 @@ assign(MIN.prototype, {
 })
 
 module.exports = MIN
-},{"../util/assign":17}],10:[function(require,module,exports){
+},{"../util/assign":21}],12:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function POW (args, ctx) {
-    var base = args[0],
-        exponent = args[1]
+    var base = args[0].value ? args[0].value : ctx[args[0].name],
+        exponent = args[1] ? args[1].value : ctx[args[1].name]
 
     return Math.pow(base, exponent) 
 }
@@ -443,7 +519,7 @@ assign(POW.prototype, {
 
 module.exports = POW
 
-},{"../util/assign":17}],11:[function(require,module,exports){
+},{"../util/assign":21}],13:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function PROD (args, ctx) {
@@ -470,7 +546,7 @@ assign(PROD.prototype, {
 
 module.exports = PROD
 
-},{"../util/assign":17}],12:[function(require,module,exports){
+},{"../util/assign":21}],14:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function QUOT (args, ctx) {
@@ -501,7 +577,7 @@ assign(QUOT.prototype, {
 
 module.exports = QUOT
 
-},{"../util/assign":17}],13:[function(require,module,exports){
+},{"../util/assign":21}],15:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function SQRT (args, ctx) {
@@ -521,7 +597,28 @@ assign(SQRT.prototype, {
 })
 
 module.exports = SQRT
-},{"../util/assign":17}],14:[function(require,module,exports){
+},{"../util/assign":21}],16:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function SUBSTR (args, ctx) {
+
+    var str = args[0].value ? args[0].value : ctx[args[0].name],
+        start = args[1].value ? args[1].value : ctx[args[1].name],
+        stop = args[2].value ? args[2].value : ctx[args[2].name]
+
+    return str.substring(start, stop || str.length)
+}
+
+assign(SUBSTR.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = SUBSTR
+},{"../util/assign":21}],17:[function(require,module,exports){
 var assign = require('../util/assign')
 
 function SUM (args, ctx) {
@@ -530,9 +627,9 @@ function SUM (args, ctx) {
     args.forEach(function (arg) {
 
         if (arg.type === 'VAR') {
-            retVal += parseFloat(ctx[arg.name])
+            retVal += ctx[arg.name]
         } else {
-            retVal += parseFloat(arg.value)
+            retVal += arg.value
         }
 
     })
@@ -543,14 +640,34 @@ function SUM (args, ctx) {
 assign(SUM.prototype, {
 
     compile: function () {
-
+        return this.toString()
     }
 
 })
 
 module.exports = SUM
 
-},{"../util/assign":17}],15:[function(require,module,exports){
+},{"../util/assign":21}],18:[function(require,module,exports){
+var assign = require('../util/assign')
+
+function UPPER (args, ctx) {
+    if (args[0].type === 'VAR') {
+        return ctx[args[0].name].toUpperCase()
+    } else {
+        return args[0].value.toUpperCase()
+    }
+}
+
+assign(UPPER.prototype, {
+
+    compile: function () {
+
+    }
+
+})
+
+module.exports = UPPER
+},{"../util/assign":21}],19:[function(require,module,exports){
 module.exports = {
     'SUM': require('./SUM'),
     'DIFF': require('./DIFF'),
@@ -560,10 +677,14 @@ module.exports = {
     'AVE': require('./AVE'),
     'SQRT': require('./SQRT'),
     'MIN': require('./MIN'),
-    'MAX': require('./MAX')
+    'MAX': require('./MAX'),
+    'SUBSTR': require('./SUBSTR'),
+    'CONCAT': require('./CONCAT'),
+    'UPPER': require('./UPPER'),
+    'LOWER': require('./LOWER')
 }
 
-},{"./AVE":6,"./DIFF":7,"./MAX":8,"./MIN":9,"./POW":10,"./PROD":11,"./QUOT":12,"./SQRT":13,"./SUM":14}],16:[function(require,module,exports){
+},{"./AVE":6,"./CONCAT":7,"./DIFF":8,"./LOWER":9,"./MAX":10,"./MIN":11,"./POW":12,"./PROD":13,"./QUOT":14,"./SQRT":15,"./SUBSTR":16,"./SUM":17,"./UPPER":18}],20:[function(require,module,exports){
 var getEscaped = require('./util/getEscaped'),
     delimiters = require('./configure/delimiters'),
     pluck = require('./util/pluck')
@@ -574,7 +695,7 @@ function delimiterToRegex (name, val) {
     return {
         name: name,
         regexString: regexString,
-        test: new RegExp( '^' + regexString )
+        test: new RegExp( '^(' + regexString + ')')
     }
 }
 
@@ -591,21 +712,34 @@ var grammar = function (delimiters) {
     regexes.push({
         name: 'OPERATOR',
         regexString: '[\*\/\+\-]',
-        test: new RegExp(/^[\*\/\+\-]/)
+        test: new RegExp(/^([\*\/\+\-])/)
     })
 
     // add in a regex to match any whitespace
     regexes.push({
         name: 'WHITESPACE',
         regexString: '[\ \t\r\n]+',
-        test: new RegExp(/^[\ \t\r\n]+/)
+        test: new RegExp(/^([\ \t\r\n]+)/)
     })
 
-    // create a regeSTRINGx that matches anything apart from keywords and whitespace
-    var allRegex = pluck(regexes, 'regexString').join('|')
+    // add in regex to get double-quoted string
     regexes.push({
-        name: 'OTHER',
-        test: new RegExp('^((?!' + allRegex + ').)*')
+        name: 'STRING',
+        regexString: '"(?:[^"\\]|\\.)*"',
+        test: new RegExp(/^"((?:[^"\\]|\\.)*)"/)
+    })
+
+    // add in regex to get numbers
+    regexes.push({
+        name: 'NUMBER',
+        regexString: '\d+(\.\d+)?',
+        test: new RegExp(/^(\d+(\.\d+)?)/)
+    })
+
+    regexes.push({
+        name: 'IDENTIFIER',
+        regexString: '[A-Za-z_]{1}[A-Za-z0-9_]*',
+        test: new RegExp(/^([A-Za-z_]{1}[A-Za-z0-9_]*)/)
     })
 
     return regexes
@@ -614,7 +748,7 @@ var grammar = function (delimiters) {
 
 module.exports = grammar(delimiters)
 
-},{"./configure/delimiters":5,"./util/getEscaped":18,"./util/pluck":23}],17:[function(require,module,exports){
+},{"./configure/delimiters":5,"./util/getEscaped":22,"./util/pluck":27}],21:[function(require,module,exports){
 function assign (target, source) {
 
     for (key in source) {
@@ -632,7 +766,7 @@ function assign (target, source) {
 
 module.exports = assign
 
-},{}],18:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 function getEscaped (str) {
     /*
         basically any special character I want to escape, preceded by a \
@@ -645,7 +779,7 @@ function getEscaped (str) {
 
 module.exports = getEscaped
 
-},{}],19:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 var keys = require('./keys')
 
 function getIndexBy (collection, predicate) {
@@ -668,19 +802,19 @@ function getIndexBy (collection, predicate) {
 }
 
 module.exports = getIndexBy
-},{"./keys":20}],20:[function(require,module,exports){
+},{"./keys":24}],24:[function(require,module,exports){
 function keys (obj) {
     return Object.keys(obj)
 }
 
 module.exports = keys
-},{}],21:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 function last (collection) {
     return collection[collection.length - 1]
 }
 
 module.exports = last
-},{}],22:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 function omit (obj, keys) {
 
     var retVal = {}
@@ -700,7 +834,7 @@ function omit (obj, keys) {
 }
 
 module.exports = omit
-},{}],23:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 function pluck (collection, prop) {
 
     return collection.map(function (item) {
